@@ -22,13 +22,52 @@ export default function RegisterPage() {
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
 
+    // Input validation
+    if (!name || name.trim().length < 2 || name.trim().length > 50) {
+      setError('Name must be between 2 and 50 characters.');
+      setLoading(false);
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      setLoading(false);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      setLoading(false);
+      return;
+    }
+
+    if (password.length > 128) {
+      setError('Password must be 128 characters or less.');
+      setLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setLoading(false);
       return;
     }
 
-    const result = await register({ name, email, password });
+    // Rate limiting: prevent rapid submissions
+    const lastSubmitTime = sessionStorage.getItem('lastRegisterAttempt');
+    if (lastSubmitTime && Date.now() - parseInt(lastSubmitTime) < 1000) {
+      setError('Please wait before trying again.');
+      setLoading(false);
+      return;
+    }
+    sessionStorage.setItem('lastRegisterAttempt', Date.now().toString());
+
+    const result = await register({ 
+      name: name.trim(), 
+      email: email.trim(), 
+      password 
+    });
 
     if (result?.error) {
       setError(result.error);

@@ -31,6 +31,25 @@ export default function AdminPage() {
 
   const fetchAllPolls = async () => {
     const supabase = createClient();
+    
+    // Check if user is admin
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    
+    // Check user role (assuming we have a roles table)
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    
+    if (!userProfile || userProfile.role !== "admin") {
+      setLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("polls")

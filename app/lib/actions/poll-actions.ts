@@ -10,9 +10,46 @@ export async function createPoll(formData: FormData) {
   const question = formData.get("question") as string;
   const options = formData.getAll("options").filter(Boolean) as string[];
 
-  if (!question || options.length < 2) {
-    return { error: "Please provide a question and at least two options." };
+  // Enhanced input validation
+  if (!question || typeof question !== 'string' || question.trim().length === 0) {
+    return { error: "Please provide a valid question." };
   }
+  
+  if (question.trim().length > 500) {
+    return { error: "Question must be 500 characters or less." };
+  }
+
+  if (options.length < 2) {
+    return { error: "Please provide at least two options." };
+  }
+
+  if (options.length > 10) {
+    return { error: "Maximum 10 options allowed." };
+  }
+
+  // Validate and sanitize each option
+  const validOptions = options
+    .filter(opt => typeof opt === 'string' && opt.trim().length > 0)
+    .map(opt => opt.trim())
+    .filter((opt, index, self) => self.indexOf(opt) === index); // Remove duplicates
+
+  if (validOptions.length < 2) {
+    return { error: "Please provide at least two unique, non-empty options." };
+  }
+
+  if (validOptions.some(opt => opt.length > 200)) {
+    return { error: "Each option must be 200 characters or less." };
+  }
+
+  // Basic XSS prevention - sanitize HTML tags
+  const sanitizedQuestion = question.trim()
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '');
+  
+  const sanitizedOptions = validOptions.map(opt => 
+    opt.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+       .replace(/<[^>]*>/g, '')
+  );
 
   // Get user from session
   const {
@@ -29,8 +66,8 @@ export async function createPoll(formData: FormData) {
   const { error } = await supabase.from("polls").insert([
     {
       user_id: user.id,
-      question,
-      options,
+      question: sanitizedQuestion,
+      options: sanitizedOptions,
     },
   ]);
 
@@ -98,6 +135,25 @@ export async function submitVote(pollId: string, optionIndex: number) {
 // DELETE POLL
 export async function deletePoll(id: string) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return { error: "You must be logged in to delete a poll." };
+  }
+
+  // Check if the poll belongs to the user
+  const { data: poll } = await supabase
+    .from("polls")
+    .select("user_id")
+    .eq("id", id)
+    .single();
+
+  if (!poll || poll.user_id !== user.id) {
+    return { error: "You can only delete your own polls." };
+  }
+
   const { error } = await supabase.from("polls").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/polls");

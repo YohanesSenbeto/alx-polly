@@ -21,7 +21,30 @@ export default function LoginPage() {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
-    const result = await login({ email, password });
+    // Input validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      setLoading(false);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      setLoading(false);
+      return;
+    }
+
+    // Rate limiting: prevent rapid submissions
+    const lastSubmitTime = sessionStorage.getItem('lastLoginAttempt');
+    if (lastSubmitTime && Date.now() - parseInt(lastSubmitTime) < 1000) {
+      setError('Please wait before trying again.');
+      setLoading(false);
+      return;
+    }
+    sessionStorage.setItem('lastLoginAttempt', Date.now().toString());
+
+    const result = await login({ email: email.trim(), password });
 
     if (result?.error) {
       setError(result.error);
